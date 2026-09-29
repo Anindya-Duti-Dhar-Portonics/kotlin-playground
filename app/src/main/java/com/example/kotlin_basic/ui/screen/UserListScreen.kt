@@ -10,6 +10,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -30,6 +34,16 @@ fun UserListScreen(
 ) {
     // StateFlow Collect করা
     val uiState by userViewModel.uiState.collectAsStateWithLifecycle()
+
+    // rememberSaveable: configuration change হলেও search text ধরে রাখে
+    var searchQuery by rememberSaveable {
+        mutableStateOf("")
+    }
+
+    // remember: এই Composition-এর মধ্যে email visibility state ধরে রাখে
+    var showEmail by remember {
+        mutableStateOf(true)
+    }
 
     Scaffold(
         topBar = {
@@ -58,10 +72,45 @@ fun UserListScreen(
                 is UiState.Loading -> CircularProgressIndicator()
                 is UiState.Error -> Text(text = "Error: ${state.message}")
                 is UiState.Success -> {
-                    UserList(
-                        users = state.users,
-                        onUserClick = onUserClick
-                    )
+                    val filteredUsers = state.users.filter { user ->
+                        user.name.contains(searchQuery, ignoreCase = true) ||
+                            user.email.contains(searchQuery, ignoreCase = true)
+                    }
+
+                    Column(
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            label = { Text("Search users") },
+                            singleLine = true,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                        )
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Show email")
+                            Switch(
+                                checked = showEmail,
+                                onCheckedChange = { showEmail = it }
+                            )
+                        }
+
+                        UserList(
+                            users = filteredUsers,
+                            showEmail = showEmail,
+                            onUserClick = onUserClick,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                 }
             }
         }
@@ -71,10 +120,12 @@ fun UserListScreen(
 @Composable
 fun UserList(
     users: List<User>,
-    onUserClick: (String) -> Unit
+    showEmail: Boolean,
+    onUserClick: (String) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     LazyColumn(
-        modifier = Modifier.fillMaxSize()
+        modifier = modifier.fillMaxSize()
     ) {
         items(
             items = users,
@@ -82,6 +133,7 @@ fun UserList(
         ) { user ->
             UserCard(
                 user = user,
+                showEmail = showEmail,
                 onClick = {
                     onUserClick(user.id)
                 }
@@ -93,6 +145,7 @@ fun UserList(
 @Composable
 fun UserCard(
     user: User,
+    showEmail: Boolean,
     onClick: () -> Unit
 ) {
     Card(
@@ -120,7 +173,9 @@ fun UserCard(
             Spacer(modifier = Modifier.width(16.dp))
             Column {
                 Text(text = user.name, style = MaterialTheme.typography.titleMedium)
-                Text(text = user.email, style = MaterialTheme.typography.bodySmall)
+                if (showEmail) {
+                    Text(text = user.email, style = MaterialTheme.typography.bodySmall)
+                }
             }
         }
     }
